@@ -6,7 +6,7 @@ from non_streamlit_functions import *
 import plotly.express as px
 import plotly.graph_objects as go
 import os
-#test
+from udisc_stats import *
 
 def singleplayer(df):
     # try:
@@ -203,28 +203,30 @@ def compareplayers(df):
             col1, col2, col3 = st.columns(3)
 
             if len(selected_players) < 2:
-                player_scores = filter_df_by_player(df, selected_players)
+                df = UdiscStats(df)
+                df.filter_df_by_player(selected_players)
+                # player_scores = filter_df_by_player(df, selected_players)
 
                 # Order the course_names by most played
-                course_names = player_scores['CourseName'].value_counts().index
+                course_names = df.df['CourseName'].value_counts().index
 
                 # Display course dropdown
                 selected_course = col1.selectbox("Select a course", course_names)
 
                 # Grab the scores for the selected course
-                player_scores = filter_df_by_course(player_scores, selected_course)
+                player_scores = df.filter_df_by_course(selected_course)
 
                 # Get layouts
-                layouts = get_layouts(df, selected_course)
+                layouts = df.get_layouts(selected_course)
 
                 # Display layout dropdown
                 layout = col2.radio("Choose a layout", layouts)
 
                 # Filter the dataframe by selected layout
-                player_scores = filter_df_by_layout(player_scores, layout)
+                df.filter_df_by_layout(layout)
 
                 # Get pars for the selected course and layout
-                pars = get_pars_of_specific_course(df, selected_course, layout)
+                pars = df.get_pars_of_specific_course(selected_course, layout)
                 par = pars["Total"]
 
                 visualization = col3.radio("Visualization Type",["Average", "Last Round", "Best Per Hole", "Best Round"])
