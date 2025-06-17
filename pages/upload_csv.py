@@ -5,8 +5,6 @@ import pandas as pd
 from io import StringIO
 
 def upload_CSV():
-    st.title("Upload your UDisc CSV file here")
-
     uploaded_file = st.file_uploader("To find your CSV file... Open the UDisc app, go to the 'More' tab, click on 'Scorecards', click the three lines in the top right corner, and then click 'Export to CSV'!", type=["csv"])
 
     return uploaded_file
@@ -21,6 +19,9 @@ if 'df' not in st.session_state:
     st.session_state.df = None
 if 'uploaded_file_name' not in st.session_state:
     st.session_state.uploaded_file_name = None
+
+if 'df' in st.session_state and st.session_state.df is not None:
+    st.info(f"You already have a DataFrame loaded '{st.session_state.uploaded_file_name}'. You can navigate to other sections, or upload a new file to replace it.")
 
 uploaded_file = upload_CSV() # Call the function from functions.py
 

@@ -8,6 +8,7 @@ import plotly.express as px
 
 
 def new(df):
+    st.title("Compare Players")
     selected_players = st.multiselect("Select players", df['PlayerName'].unique())
 
     if selected_players:
