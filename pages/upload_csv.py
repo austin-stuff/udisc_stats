@@ -3,6 +3,12 @@
 import streamlit as st
 import pandas as pd
 from io import StringIO
+from db import (
+    initialize_database,
+    list_uploads,
+    load_upload_df,
+    save_upload,
+)
 
 def upload_CSV():
     uploaded_file = st.file_uploader("To find your CSV file... Open the UDisc app, go to the 'More' tab, click on 'Scorecards', click the three lines in the top right corner, and then click 'Export to CSV'!", type=["csv"])
@@ -19,6 +25,42 @@ if 'df' not in st.session_state:
     st.session_state.df = None
 if 'uploaded_file_name' not in st.session_state:
     st.session_state.uploaded_file_name = None
+if 'last_saved_upload_id' not in st.session_state:
+    st.session_state.last_saved_upload_id = None
+
+# Ensure the on-disk database and folders exist
+initialize_database()
+
+# Section to load a previously saved upload
+with st.expander("Load previously saved upload", expanded=False):
+    saved_uploads = list_uploads()
+    if not saved_uploads:
+        st.info("No saved uploads yet. Upload a CSV below to save it for future use.")
+    else:
+        option_labels = [
+            f"{rec.id} — {rec.filename} — {rec.num_rows}x{rec.num_cols} — {rec.uploaded_at}"
+            for rec in saved_uploads
+        ]
+        selected_label = st.selectbox(
+            "Choose a saved dataset",
+            option_labels,
+            index=0 if option_labels else None,
+        )
+        if st.button("Load selected dataset") and selected_label:
+            # Map label back to record
+            selected_index = option_labels.index(selected_label)
+            selected_record = saved_uploads[selected_index]
+            try:
+                df_loaded = load_upload_df(selected_record.id)
+                st.session_state.df = df_loaded
+                st.session_state.uploaded_file_name = selected_record.filename
+                st.session_state.last_saved_upload_id = selected_record.id
+                st.success(
+                    f"Loaded saved dataset '{selected_record.filename}' (id {selected_record.id}). "
+                    "You can navigate to other sections using the sidebar."
+                )
+            except Exception as e:
+                st.error(f"Failed to load saved dataset: {e}")
 
 if 'df' in st.session_state and st.session_state.df is not None:
     st.info(f"You already have a DataFrame loaded '{st.session_state.uploaded_file_name}'. You can navigate to other sections, or upload a new file to replace it.")
@@ -47,6 +89,16 @@ if uploaded_file is not None:
             # Store the cleaned DataFrame and the uploaded file's name in session state
             st.session_state.df = df
             st.session_state.uploaded_file_name = uploaded_file.name # Store name to detect new upload
+            # Persist the upload for future use (deduped by file content)
+            try:
+                record = save_upload(uploaded_file.name, bytes_data, df)
+                st.session_state.last_saved_upload_id = record.id
+                st.info(
+                    f"Saved dataset to local database as id {record.id} "
+                    f"({record.num_rows} rows × {record.num_cols} cols)."
+                )
+            except Exception as e:
+                st.warning(f"Uploaded file processed but could not be saved for later use: {e}")
             st.success(f"CSV file '{uploaded_file.name}' uploaded and processed successfully! "
                        "You can now navigate to other sections using the sidebar.")
 
