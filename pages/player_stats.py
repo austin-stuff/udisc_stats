@@ -58,13 +58,17 @@ def _display_overall_stats(stats, player_name):
     worst_round = int(player_data['+/-'].max())
     
     # Display metrics in columns
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # Use a more responsive layout for metrics
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Total Rounds", total_rounds)
+        st.metric("Best Round", f"{best_round:+d}")
+    with col2:
+        st.metric("Average Score", f"{avg_score_relative:+.1f}")
+        st.metric("Worst Round", f"{worst_round:+d}")
     
-    col1.metric("Total Rounds", total_rounds)
-    col2.metric("Average Score", f"{avg_score_relative:+.1f}")
-    col3.metric("Average Rating", f"{avg_rating:.0f}")
-    col4.metric("Best Round", f"{best_round:+d}")
-    col5.metric("Worst Round", f"{worst_round:+d}")
+    # Center the average rating
+    st.metric("Average Rating", f"{avg_rating:.0f}")
     
     # Best and worst round details
     st.subheader("🏆 Best & Worst Rounds")
@@ -124,16 +128,26 @@ def _display_course_analysis(stats, player_name):
                 size_values = size_values - size_values.min() + 1
             
             fig = px.scatter(
-                x=plot_data['Rounds Played'],
-                y=plot_data['Avg Score'],
+                plot_data,
+                x='Rounds Played',
+                y='Avg Score',
                 size=size_values,
                 hover_name=plot_data.index,
                 title=f"{player_name} - Course Performance Overview",
                 labels={
-                    'x': 'Rounds Played',
-                    'y': 'Average Score (relative to par)',
-                    'size': 'Average Rating'
-                }
+                    'Rounds Played': 'Rounds Played',
+                    'Avg Score': 'Average Score (relative to par)',
+                    'Avg Rating': 'Average Rating'
+                },
+                custom_data=['Best Score', 'Avg Rating']
+            )
+            
+            fig.update_traces(
+                hovertemplate="<b>%{hovertext}</b><br><br>" +
+                              "Rounds Played: %{x}<br>" +
+                              "Average Score: %{y:+.2f}<br>" +
+                              "Best Score: %{customdata[0]:+d}<br>" +
+                              "Average Rating: %{customdata[1]:.0f}<extra></extra>"
             )
             
             fig.update_layout(height=400)
@@ -177,8 +191,12 @@ def _display_performance_trends(stats, player_name):
             mode='markers',
             name='Individual Rounds',
             marker=dict(size=6, opacity=0.6),
-            hovertemplate='<b>%{text}</b><br>Score: %{y:+d}<br>Date: %{x}<extra></extra>',
-            text=player_data['CourseName']
+            hovertemplate='<b>%{customdata[0]}</b><br>' +
+                          'Layout: %{customdata[1]}<br>' +
+                          'Score: %{y:+d}<br>' +
+                          'Rating: %{customdata[2]:.0f}<br>' +
+                          'Date: %{x|%Y-%m-%d}<extra></extra>',
+            customdata=player_data[['CourseName', 'LayoutName', 'RoundRating']]
         ))
         
         fig_score.add_trace(go.Scatter(
@@ -208,8 +226,12 @@ def _display_performance_trends(stats, player_name):
             mode='markers',
             name='Individual Rounds',
             marker=dict(size=6, opacity=0.6),
-            hovertemplate='<b>%{text}</b><br>Rating: %{y:.0f}<br>Date: %{x}<extra></extra>',
-            text=player_data['CourseName']
+            hovertemplate='<b>%{customdata[0]}</b><br>' +
+                          'Layout: %{customdata[1]}<br>' +
+                          'Score: %{customdata[2]:+d}<br>' +
+                          'Rating: %{y:.0f}<br>' +
+                          'Date: %{x|%Y-%m-%d}<extra></extra>',
+            customdata=player_data[['CourseName', 'LayoutName', '+/-']]
         ))
         
         fig_rating.add_trace(go.Scatter(

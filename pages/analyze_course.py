@@ -174,13 +174,15 @@ def _create_course_overview_grid(stats, selected_players, selected_course, layou
         hole_data.append(hole_stats)
     
     # Create grid layout
-    cols_per_row = 6
+    # Use a more responsive grid layout
+    cols_per_row = st.number_input("Columns per row", 2, 8, 4)
+    
     rows = [hole_data[i:i + cols_per_row] for i in range(0, len(hole_data), cols_per_row)]
     
     for row in rows:
-        cols = st.columns(len(row))
-        for col, hole_info in zip(cols, row):
-            with col:
+        cols = st.columns(cols_per_row)
+        for i, hole_info in enumerate(row):
+            with cols[i]:
                 _create_hole_card(hole_info)
 
 
@@ -194,46 +196,30 @@ def _create_hole_card(hole_info):
         avg_scores = [p['avg'] for p in hole_info['players'].values()]
         avg_relative = np.mean(avg_scores) - par
         
-        if avg_relative < -0.5:
-            card_color = "#d4edda"  # Green - easy hole
-        elif avg_relative > 0.5:
-            card_color = "#f8d7da"  # Red - difficult hole
+        if avg_relative < -0.25:
+            status = "Easy"
+        elif avg_relative > 0.25:
+            status = "Hard"
         else:
-            card_color = "#fff3cd"  # Yellow - average hole
+            status = "Average"
     else:
-        card_color = "#f8f9fa"  # Gray - no data
-    
+        status = "No Data"
 
+    with st.container(border=True):
+        st.markdown(f"**Hole {hole_num} (Par {par})**")
+        
+        if status == "Easy":
+            st.markdown(f"**Status:** <span style='color: green;'>{status}</span>", unsafe_allow_html=True)
+        elif status == "Hard":
+            st.markdown(f"**Status:** <span style='color: red;'>{status}</span>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"**Status:** {status}")
     
-    st.markdown(f"""
-    <div style="
-        background-color: {card_color};
-        padding: 10px;
-        border-radius: 8px;
-        border: 1px solid #dee2e6;
-        text-align: center;
-        margin-bottom: 10px;
-    ">
-        <h4 style="margin: 0; color: #333;">Hole {hole_num}</h4>
-        <p style="margin: 5px 0; font-weight: bold; color: #333;">Par {par}</p>
-    """, unsafe_allow_html=True)
-    
-    for player, stats in hole_info['players'].items():
-        avg_score = stats['avg']
+    for player, p_stats in hole_info['players'].items():
+        avg_score = p_stats['avg']
         relative_score = avg_score - par
-        under_par_pct = stats['under_par_pct']
         
-        color = "#28a745" if relative_score < 0 else "#dc3545" if relative_score > 0 else "#6c757d"
-        
-        st.markdown(f"""
-        <div style="font-size: 12px; margin: 2px 0;">
-            <strong>{player}:</strong><br>
-            <span style="color: {color};">{avg_score:.2f} ({relative_score:+.2f})</span><br>
-            <span style="color: #666;">{under_par_pct:.0f}% under par</span>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(f"**{player}:** {avg_score:.2f} ({relative_score:+.2f})")
 
 
 def _create_performance_heatmap(stats, selected_players, selected_course, layout, holes, pars):
@@ -242,45 +228,33 @@ def _create_performance_heatmap(stats, selected_players, selected_course, layout
     st.write("Darker colors indicate better performance (lower scores relative to par)")
     
     # Prepare data for heatmap
-    heatmap_data = []
-    hole_numbers = []
+    heatmap_data = pd.DataFrame(index=[f"Hole {i}" for i in range(1, len(holes) + 1)], columns=selected_players)
     
-    for i, hole in enumerate(holes, 1):
-        hole_name = f'Hole{i}'
-        par = int(pars[hole_name]) if hole_name in pars else 3
-        hole_numbers.append(f"Hole {i}\n(Par {par})")
+    for player in selected_players:
+        player_stats = UdiscStats(stats.raw_df)
+        player_stats.filter_df_by_player([player])
+        player_stats.filter_df_by_course(selected_course)
+        player_stats.filter_df_by_layout(layout)
         
-        row_data = []
-        for player in selected_players:
-            player_stats = UdiscStats(stats.raw_df)
-            player_stats.filter_df_by_player([player])
-            player_stats.filter_df_by_course(selected_course)
-            player_stats.filter_df_by_layout(layout)
+        for i, hole in enumerate(holes, 1):
+            hole_name = f'Hole{i}'
+            par = int(pars.get(hole_name, 3))
             
             if not player_stats.df.empty and hole_name in player_stats.df.columns:
                 hole_scores = player_stats.df[hole_name].dropna()
-                if len(hole_scores) > 0:
+                if not hole_scores.empty:
                     avg_score = hole_scores.mean()
-                    relative_score = avg_score - par
-                    row_data.append(relative_score)
-                else:
-                    row_data.append(None)
-            else:
-                row_data.append(None)
-        
-        heatmap_data.append(row_data)
+                    heatmap_data.loc[f"Hole {i}", player] = avg_score - par
     
     # Create heatmap
-    fig = go.Figure(data=go.Heatmap(
-        z=heatmap_data,
-        x=selected_players,
-        y=hole_numbers,
-        colorscale='RdYlGn_r',  # Red for bad, Green for good
-        zmid=0,  # Center at par
-        colorbar=dict(title="Score vs Par"),
-        hoverongaps=False,
-        hovertemplate='<b>%{y}</b><br><b>%{x}</b><br>Score vs Par: %{z:.2f}<extra></extra>'
-    ))
+    fig = px.imshow(
+        heatmap_data,
+        text_auto=".2f",
+        aspect="auto",
+        color_continuous_scale='RdYlGn_r',
+        color_continuous_midpoint=0,
+        labels=dict(x="Player", y="Hole", color="Score vs Par")
+    )
     
     fig.update_layout(
         title="Performance Heatmap - All Holes",
@@ -537,13 +511,18 @@ def _create_comparison_chart(stats, selected_players, selected_course, layout, p
             # Add trace to plot
             fig.add_trace(
                 go.Scatter(
-                    x=hole_numbers, 
-                    y=relative_scores, 
-                    name=player, 
-                    mode='markers+lines', 
+                    x=hole_numbers,
+                    y=relative_scores,
+                    name=player,
+                    mode='markers+lines',
                     marker=dict(size=8),
                     line=dict(width=2),
-                    hovertemplate=f'<b>{player}</b><br>Hole: %{{x}}<br>Relative to Par: %{{y:+.2f}}<extra></extra>'
+                    customdata=player_stats.df,
+                    hovertemplate='<b>' + player + '</b><br>' +
+                                  'Hole: %{x}<br>' +
+                                  'Relative to Par: %{y:+.2f}<br>' +
+                                  'Date: %{customdata[0]|%Y-%m-%d}<br>' +
+                                  'Rating: %{customdata[1]:.0f}<extra></extra>'
                 )
             )
         except Exception as e:
