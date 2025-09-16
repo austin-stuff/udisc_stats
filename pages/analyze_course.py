@@ -118,7 +118,7 @@ def _create_complete_course_analysis(stats, selected_players, selected_course, l
     st.subheader(f"📍 {selected_course} - {layout}")
     
     # Create tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs(["🗺️ Course Overview", "🔥 Performance Heatmap", "📊 Detailed Stats", "🎯 Individual Holes"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🗺️ Course Overview", "🔥 Performance Heatmap", "📊 Detailed Stats", "🎯 Individual Holes", "📈 Plot Stats"])
     
     with tab1:
         _create_course_overview_grid(stats, selected_players, selected_course, layout, holes, pars)
@@ -131,6 +131,9 @@ def _create_complete_course_analysis(stats, selected_players, selected_course, l
     
     with tab4:
         _create_individual_hole_cards(stats, selected_players, selected_course, layout, holes, pars)
+    
+    with tab5:
+        _create_player_comparison_tab(stats, selected_players, selected_course, layout, holes, pars)
 
 
 def _create_course_overview_grid(stats, selected_players, selected_course, layout, holes, pars):
@@ -446,6 +449,141 @@ def _create_mini_score_chart(scores_df, hole_number, par):
     )
     
     st.plotly_chart(fig, use_container_width=True)
+
+
+def _create_player_comparison_tab(stats, selected_players, selected_course, layout, holes, pars):
+    """Create the plot stats tab with line charts showing relative performance."""
+    st.subheader("📈 Plot Player Statistics")
+    st.write("Visualize player performance across all holes, showing scores relative to par")
+    
+    if len(selected_players) < 1:
+        st.info("Select at least 1 player to see performance statistics.")
+        return
+    
+    # Get par data and total
+    par_total = pars["Total"] if "Total" in pars else sum([pars[hole] for hole in holes if hole in pars])
+    
+    # Visualization type selector with unique key to prevent scroll-to-top
+    visualization = st.radio(
+        "Choose visualization type:", 
+        ["Average", "Last Round", "Best Per Hole", "Best Round"],
+        horizontal=True,
+        key=f"viz_selector_{selected_course}_{layout}"
+    )
+    
+    # Create a container for the chart to prevent scroll-to-top
+    chart_container = st.container()
+    
+    with chart_container:
+        # Create the comparison chart
+        _create_comparison_chart(stats, selected_players, selected_course, layout, par_total, visualization, holes, pars)
+
+
+def _create_comparison_chart(stats, selected_players, selected_course, layout, par_total, visualization, holes, pars):
+    """Create and display the comparison chart."""
+    fig = go.Figure()
+    
+    for player in selected_players:
+        # Create a fresh stats object for each player
+        player_stats = UdiscStats(stats.raw_df)
+        player_stats.filter_df_by_player([player])
+        player_stats.filter_df_by_course(selected_course)
+        player_stats.filter_df_by_layout(layout)
+        
+        if player_stats.df.empty:
+            st.warning(f"No data found for {player}")
+            continue
+            
+        player_holes = player_stats.get_holes_from_round()
+        
+        if not player_holes:
+            st.warning(f"No hole data found for {player}")
+            continue
+            
+        hole_numbers = [int(hole[4:]) for hole in player_holes]
+        
+        try:
+            # Calculate scores based on visualization type
+            if visualization == "Best Per Hole":
+                scores = player_stats.get_best_score_per_hole().values.tolist()
+                total_score = sum(scores)
+                st.write(f"**{player}** - Theoretical Best: {total_score:.1f} ({total_score - par_total:+.1f})")
+                
+            elif visualization == "Average":
+                scores = player_stats.get_average_score_per_hole()
+                avg_total = player_stats.df["Total"].mean()
+                st.write(f"**{player}** - Average: {avg_total:.1f} ({avg_total - par_total:+.1f})")
+                
+            elif visualization == "Last Round":
+                scores = player_stats.get_last_round_scores()
+                total_score = sum(scores)
+                st.write(f"**{player}** - Last Round: {total_score:.1f} ({total_score - par_total:+.1f})")
+                
+            elif visualization == "Best Round":
+                best_round = player_stats.get_best_round()
+                best_score = float(best_round["Total"])
+                scores = best_round[player_holes].values.tolist()
+                st.write(f"**{player}** - Best Round: {best_score:.1f} ({best_score - par_total:+.1f})")
+            
+            # Convert absolute scores to relative scores (score - par for each hole)
+            relative_scores = []
+            for i, hole in enumerate(player_holes):
+                if i < len(scores) and hole in pars:
+                    relative_score = round(scores[i] - pars[hole], 2)
+                    relative_scores.append(relative_score)
+                else:
+                    relative_scores.append(None)  # Handle missing data
+            
+            # Add trace to plot
+            fig.add_trace(
+                go.Scatter(
+                    x=hole_numbers, 
+                    y=relative_scores, 
+                    name=player, 
+                    mode='markers+lines', 
+                    marker=dict(size=8),
+                    line=dict(width=2),
+                    hovertemplate=f'<b>{player}</b><br>Hole: %{{x}}<br>Relative to Par: %{{y:+.2f}}<extra></extra>'
+                )
+            )
+        except Exception as e:
+            st.error(f"Error processing data for {player}: {str(e)}")
+            continue
+
+    # Add horizontal line at 0 (par line)
+    if fig.data:
+        fig.add_hline(
+            y=0, 
+            line_dash="dash", 
+            line_color="gray", 
+            annotation_text="Par",
+            annotation_position="bottom right"
+        )
+    
+    # Update layout
+    if fig.data:  # Only show chart if we have data
+        fig.update_layout(
+            title=f"{visualization} Scores Relative to Par: {selected_course} - {layout}",
+            xaxis_title='Hole Number',
+            yaxis_title='Score Relative to Par',
+            xaxis=dict(
+                tickmode='array',
+                tickvals=hole_numbers if 'hole_numbers' in locals() else [],
+                showgrid=True,
+            ),
+            yaxis=dict(
+                showgrid=True,
+                zeroline=True,
+                zerolinecolor='gray',
+                zerolinewidth=2
+            ),
+            hovermode='x unified',
+            height=500
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No data available to display chart.")
 
 
 # Check if data is available and run the app

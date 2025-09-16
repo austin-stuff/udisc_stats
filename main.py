@@ -215,8 +215,7 @@ This app provides enhanced data visualization for your UDisc scorecards. Since U
 you'll need to manually export your scorecard data as CSV files from the UDisc mobile app.
 
 ### Available Analysis Pages:
-- **🏆 Compare Players**: Analyze and compare performance across different players
-- **🎯 Hole Breakdown**: Get detailed statistics for individual holes  
+- **🎯 Hole Breakdown**: Complete course analysis with player comparisons, heatmaps, and detailed hole statistics
 - **👤 Player Statistics**: Comprehensive individual player analytics and trends
 """)
 
