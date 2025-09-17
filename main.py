@@ -25,7 +25,8 @@ def clean_udisc_data(df):
     course_name_mapping = {
         'Indian Riffle Park/Kettering': 'Indian Riffle Disc Golf Course',
         'Belmont Park': 'Belmont Park Disc Golf Course',
-        'Karohl Park': 'Karohl Park Disc Golf Course'
+        'Karohl Park': 'Karohl Park Disc Golf Course',
+        'Sycamore Trails Park': 'Reazin Family DGC @ Sycamore Trails Park',
     }
     df['CourseName'] = df['CourseName'].replace(course_name_mapping)
 
@@ -217,6 +218,7 @@ you'll need to manually export your scorecard data as CSV files from the UDisc m
 ### Available Analysis Pages:
 - **🎯 Hole Breakdown**: Complete course analysis with player comparisons, heatmaps, and detailed hole statistics
 - **👤 Player Statistics**: Comprehensive individual player analytics and trends
+- **⛳ Course Difficulty**: Personalized course difficulty rankings based on your performance
 """)
 
 # Display upload instructions
